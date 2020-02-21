@@ -1,20 +1,35 @@
 <html>
   <head>
     <title>Pie Chart Points</title>
-    <style>
-      body {
-          padding: 0;
-          margin: 0;
-      }
-
-      html, body, #map {
-          height: 100%;
-          width: 100%;
-      }
-    </style>
+    <link rel="stylesheet" href="./main.css">
   </head>
   <body>
-    <div id="map" class="map"></div>
+    <div id="map" class="map">
+      <div id="tools" class="tools">
+        <select id="disease">
+          <option value="WND" selected>West Nile Fever</option>
+          <option value="RVF">Rift Valley Fever</option>
+        </select>
+        <br/>
+        <select id="country">
+          <option value="ITALY" selected>Italy</option>
+          <option value="FRANCE">France</option>
+          <option value="SPAIN">Spain</option>
+          <option value="PORTUGAL">Portugal</option>
+          <option value="GERMANY">Germany</option>
+        </select>
+        <br/>
+        <select id="year">
+          <option value="2015" selected>2015</option>
+          <option value="2016">2016</option>
+          <option value="2017">2017</option>
+          <option value="2018">2018</option>
+          <option value="2019">2019</option>
+          <option value="2020">2020</option>
+        </select>
+        <div id="loading-div"></div>
+      </div>
+    </div>
     <script src="./index.js"></script>
   </body>
 </html>

@@ -85,7 +85,7 @@ var adminUnitsLayer = new VectorImageLayer({
 });
 map.addLayer(adminUnitsLayer);
 
-var diseaseCentroidsLayer =  new VectorImageLayer({
+var diseaseCentroidsLayer = new VectorImageLayer({
   imageRatio: 2,
   source: new VectorSource({
     format: new GeoJSON()
@@ -107,74 +107,81 @@ var diseaseCentroidsLayer =  new VectorImageLayer({
 map.addLayer(diseaseCentroidsLayer);
 // diseaseCentroidsLayer.setVisible(false)
 // console.log(diseaseCentroidsLayer.getSource().getFeatures());
+const extractDistributionData = function(){
 
-axios.get('https://webgis.izs.it/arcgis/rest/services/NetMed/NETMED/MapServer/2/query',{
-  params:{
-      where: "COUNTRY_N IN('ITALY','FRANCE','SPAIN', 'GERMANY')",
-      returnGeometry: false,
-      outFields: 'GEO_ID,FLAG_DISEASE,LATITUDE,LONGITUDE',
-      f: 'geojson'
-  }
-}).then(function(response){
-  // console.log(response.data.features);
-  var distribution_data = response.data.features;
-  var data = [];
-  distribution_data.forEach(element => {
-    var geoid = element.properties.GEO_ID;
-    var flag  = element.properties.FLAG_DISEASE;
-    var lat   = element.properties.LATITUDE;
-    var lng   = element.properties.LONGITUDE;
-    data.push( { "geoid" : geoid, "flag": flag, "lng": lng.toFixed(3), "lat": lat.toFixed(3) } );
+  // Parametri
+  let disease = document.querySelector('#disease').value;
+  let country = document.querySelector('#country').value;
+  let refYear = document.querySelector('#year').value;
+
+  axios.get('https://webgis.izs.it/arcgis/rest/services/NetMed/NETMED/MapServer/2/query',{
+    params:{
+        where: " DISEASE_DESC = '"+disease+"' AND COUNTRY_N IN('"+country+"') AND YEAR_REF_START = '"+refYear+"' AND YEAR_REF_END = '"+refYear+"' ",
+        returnGeometry: false,
+        outFields: 'GEO_ID,FLAG_DISEASE,LATITUDE,LONGITUDE',
+        f: 'geojson'
+    }
+  }).then(function(response){
+    // console.log(response.data.features);
+    var distribution_data = response.data.features;
+    var data = [];
+    distribution_data.forEach(element => {
+      var geoid = element.properties.GEO_ID;
+      var flag  = element.properties.FLAG_DISEASE;
+      var lat   = element.properties.LATITUDE;
+      var lng   = element.properties.LONGITUDE;
+      data.push( { "geoid" : geoid, "flag": flag, "lng": lng.toFixed(3), "lat": lat.toFixed(3) } );
+    });
+
+    var grouped_data = [];
+    grouped_data = lodash.groupBy(data,"geoid");
+    // console.log(grouped_data);
+
+    var centroids = [];
+    var unique_geoids = [];
+    lodash.forEach(grouped_data,function(item, key){
+
+      var num_u  = lodash.filter(item, function(el) { return el.flag == "U"; }).length;
+      var num_c  = lodash.filter(item, function(el) { return el.flag == "C"; }).length;
+      var num_v  = lodash.filter(item, function(el) { return el.flag == "V"; }).length;
+      var num_un = lodash.filter(item, function(el) { return el.flag == null; }).length;
+      var num_tot = num_u + num_c + num_v + num_un;
+
+      var feature = {
+        "type":"Feature",
+        "geometry":{
+          "type": "Point", 
+          "coordinates": new transform([ 
+            parseFloat(item[0].lng), 
+            parseFloat(item[0].lat) 
+          ],'EPSG:4326','EPSG:3857')
+        },
+        "properties":{
+          "geoid": key, 
+          "human": num_u,
+          "animals": num_c,
+          "viral": num_v,
+          "unknown": num_un,
+          "tot": num_tot
+        }
+      };
+      // console.log(feature);
+      centroids.push(feature);
+      unique_geoids.push(key);
+    });
+    // console.log(centroids)
+    // console.log(unique_geoids)
+
+    // Popola il layer dei centroidi di distribuzione
+    var collection = {"type": "FeatureCollection", "features": centroids};
+    var featureCollection = new GeoJSON().readFeatures(collection);
+    diseaseCentroidsLayer.getSource().addFeatures(featureCollection);
+    // Popola il layer dei poligoni delle unità amministrative in base ai geoid dei centroidi
+    populateAdminUnitsLayer(unique_geoids)
   });
+}
 
-  var grouped_data = [];
-  grouped_data = lodash.groupBy(data,"geoid");
-  // console.log(grouped_data);
-
-  var centroids = [];
-  var unique_geoids = [];
-  lodash.forEach(grouped_data,function(item, key){
-
-    var num_u  = lodash.filter(item, function(el) { return el.flag == "U"; }).length;
-    var num_c  = lodash.filter(item, function(el) { return el.flag == "C"; }).length;
-    var num_v  = lodash.filter(item, function(el) { return el.flag == "V"; }).length;
-    var num_un = lodash.filter(item, function(el) { return el.flag == null; }).length;
-    var num_tot = num_u + num_c + num_v + num_un;
-
-    var feature = {
-      "type":"Feature",
-      "geometry":{
-        "type": "Point", 
-        "coordinates": new transform([ 
-          parseFloat(item[0].lng), 
-          parseFloat(item[0].lat) 
-        ],'EPSG:4326','EPSG:3857')
-      },
-      "properties":{
-        "geoid": key, 
-        "human": num_u,
-        "animals": num_c,
-        "viral": num_v,
-        "unknown": num_un,
-        "tot": num_tot
-      }
-    };
-    // console.log(feature);
-    centroids.push(feature);
-    unique_geoids.push(key);
-  });
-  // console.log(centroids)
-  // console.log(unique_geoids)
-
-  // Popola il layer dei centroidi di distribuzione
-  var collection = {"type": "FeatureCollection", "features": centroids};
-  var featureCollection = new GeoJSON().readFeatures(collection);
-  diseaseCentroidsLayer.getSource().addFeatures(featureCollection);
-  // Popola il layer dei poligoni delle unità amministrative in base ai geoid dei centroidi
-  populateAdminUnitsLayer(unique_geoids)
-});
-
-var populateAdminUnitsLayer = function(unique_geoids){
+const populateAdminUnitsLayer = function(unique_geoids){
   axios.get('https://webgis.izs.it/arcgis/rest/services/NetMed/NETMED/MapServer/3/query',{
   params:{
       where: "GEO_ID IN ('"+unique_geoids.join("','")+"')",
@@ -191,6 +198,11 @@ var populateAdminUnitsLayer = function(unique_geoids){
   })
 };
 
+const clearLayers = function(){
+  diseaseCentroidsLayer.getSource().clear();
+  adminUnitsLayer.getSource().clear();
+}
+
 map.on('moveend', function(){
   console.log( "zoom corrente:",map.getView().getZoom() )
   if (map.getView().getZoom() >= 10) {
@@ -198,6 +210,28 @@ map.on('moveend', function(){
   } else {
     // diseaseCentroidsLayer.setVisible(false);
   }
+});
+
+map.on('load', function(){
+  extractDistributionData()
+});
+
+const selectDisease = document.querySelector('#disease');
+selectDisease.addEventListener('change', (event) => {
+  clearLayers();
+  extractDistributionData();
+});
+
+const selectCountry = document.querySelector('#country');
+selectCountry.addEventListener('change', (event) => {
+  clearLayers();
+  extractDistributionData()
+});
+
+const selectRefYear = document.querySelector('#year');
+selectRefYear.addEventListener('change', (event) => {
+  clearLayers();
+  extractDistributionData()
 });
 
 /*
