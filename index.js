@@ -212,7 +212,7 @@ map.on('moveend', function(){
   }
 });
 
-map.on('load', function(){
+map.once('postrender', function(){
   extractDistributionData()
 });
 
